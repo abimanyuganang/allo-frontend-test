@@ -11,6 +11,8 @@ const rockets = ref<Rocket[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 const search = ref('')
+const selectedCountry = ref('All')
+const sortBy = ref('default')
 
 const rocketStore = useRocketStore()
 
@@ -20,14 +22,48 @@ const allRockets = computed(() => [
   ...rockets.value,
 ])
 
-// Filter all rockets by name
+const countryOptions = computed(() => {
+  const countries = allRockets.value
+    .map(rocket => rocket.manufacturer?.country_code)
+    .filter((country): country is string => Boolean(country))
+
+  return [
+    'All',
+    ...new Set(countries),
+  ]
+})
+
+// Filter all rockets by country
 const filteredRockets = computed(() => {
   const query = search.value.trim().toLowerCase()
 
-  return allRockets.value.filter(rocket =>
-    (rocket.full_name || '').toLowerCase().includes(query)
-  )
+  let result = allRockets.value.filter(rocket => {
+    const matchesSearch = (rocket.full_name || '')
+      .toLowerCase()
+      .includes(query)
+
+    const matchesCountry =
+      selectedCountry.value === 'All' ||
+      rocket.manufacturer?.country_code === selectedCountry.value
+
+    return matchesSearch && matchesCountry
+  })
+
+  if (sortBy.value === 'name-asc') {
+    result = [...result].sort((a, b) =>
+      (a.full_name || '').localeCompare(b.full_name || '')
+    )
+  }
+
+  if (sortBy.value === 'name-desc') {
+    result = [...result].sort((a, b) =>
+      (b.full_name || '').localeCompare(a.full_name || '')
+    )
+  }
+
+  return result
 })
+
 
 // Fetch rockets from the API
 async function fetchRockets() {
@@ -66,15 +102,68 @@ onMounted(fetchRockets)
     </div>
 
     <!-- Search -->
-    <v-text-field
-      v-model="search"
-      label="Search rockets"
-      prepend-inner-icon="mdi-magnify"
-      variant="outlined"
-      clearable
-      hide-details
-      class="mb-6"
-    />
+    
+    <!-- Search, Filter, and Sort -->
+    <v-row class="mb-4">
+      <!-- Search -->
+      <v-col cols="12" md="6">
+        <v-text-field
+          v-model="search"
+          label="Search rockets"
+          prepend-inner-icon="mdi-magnify"
+          variant="outlined"
+          clearable
+          hide-details
+        />
+      </v-col>
+
+      <!-- Country Filter -->
+      <v-col cols="12" sm="6" md="3">
+        <v-select
+          v-model="selectedCountry"
+          :items="countryOptions"
+          label="Filter by Country"
+          prepend-inner-icon="mdi-filter"
+          variant="outlined"
+          hide-details
+        />
+      </v-col>
+
+      <!-- Sort -->
+      <v-col cols="12" sm="6" md="3">
+        <v-select
+          v-model="sortBy"
+          :items="[
+            { title: 'Default', value: 'default' },
+            { title: 'Name (A-Z)', value: 'name-asc' },
+            { title: 'Name (Z-A)', value: 'name-desc' }
+          ]"
+          label="Sort by"
+          prepend-inner-icon="mdi-sort"
+          variant="outlined"
+          hide-details
+        />
+      </v-col>
+    </v-row>
+
+    <div class="d-flex justify-space-between align-center mb-4">
+      <p class="text-medium-emphasis">
+        Showing {{ filteredRockets.length }} of
+        {{ allRockets.length }} rockets
+      </p>
+
+      <v-btn
+        variant="text"
+        color="primary"
+        @click="
+          search = '';
+          selectedCountry = 'All';
+          sortBy = 'default'
+        "
+      >
+        Clear Filters
+      </v-btn>
+    </div>
 
     <!-- Loading -->
     <v-row v-if="loading && !allRockets.length">
@@ -111,12 +200,6 @@ onMounted(fetchRockets)
           </v-btn>
         </div>
       </v-alert>
-
-      <!-- Results counter -->
-      <p class="mb-4 text-medium-emphasis">
-        Showing {{ filteredRockets.length }} of
-        {{ allRockets.length }} rockets
-      </p>
 
       <!-- Rocket cards -->
       <v-row v-if="filteredRockets.length">
