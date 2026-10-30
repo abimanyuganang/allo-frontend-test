@@ -3,12 +3,14 @@ import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { getRocketById } from '../../api/rockets'
 import type { Rocket } from '../../types/rocket'
+import { useRocketStore } from '../../stores/rockets'
 
 const route = useRoute()
 
 const rocket = ref<Rocket | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
+const rocketStore = useRocketStore()
 
 let requestId = 0
 
@@ -23,6 +25,19 @@ async function fetchRocket() {
   try {
     if (!id) {
       throw new Error('Rocket ID is missing')
+    }
+
+    const localRocket = rocketStore.findLocalRocket(id)
+
+    if (localRocket) {
+      if (currentRequest === requestId) {
+        rocket.value = localRocket
+      }
+      return
+    }
+
+    if (id.startsWith('local-')) {
+      throw new Error('Local rocket not found. It may have been lost after a page refresh.')
     }
 
     const result = await getRocketById(id)
